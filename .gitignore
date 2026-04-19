@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Data (fetched locally, not committed)
+data/*.db
+
+# IDE / tools
+.claude/
+data/*.db-shm
+data/*.db-wal

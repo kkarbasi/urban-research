@@ -1,0 +1,12 @@
+census:
+  # Free API key — get one at https://api.census.gov/data/key_signup.html
+  # Works without a key (500 requests/day/IP), but a key removes rate limits.
+  api_key: null
+
+storage:
+  db_path: data/urban_research.db
+
+pipeline:
+  min_population: 200000
+  # null = auto-detect latest available vintage
+  default_vintage: null
