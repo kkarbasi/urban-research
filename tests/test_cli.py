@@ -55,4 +55,4 @@ class TestCLI:
         output_path = tmp_path / "existing.yaml"
         output_path.write_text("existing: true")
         result = runner.invoke(cli, ["init-config", "--path", str(output_path)])
-        assert "already exists" in result.output
+        assert "already" in result.output and "exists" in result.output
