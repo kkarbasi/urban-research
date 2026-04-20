@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Cityscope" width="420">
+  <img src="https://raw.githubusercontent.com/kkarbasi/cityscope/main/assets/logo.svg" alt="Cityscope" width="420">
 </p>
 
 <p align="center">
