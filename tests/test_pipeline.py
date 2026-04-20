@@ -3,9 +3,9 @@
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
-from urban_research.core.config import Config
-from urban_research.core.models import DataPoint, DatasetMetadata, FetchResult, Geography, GeoType
-from urban_research.pipeline.runner import Pipeline
+from cityscope.core.config import Config
+from cityscope.core.models import DataPoint, DatasetMetadata, FetchResult, Geography, GeoType
+from cityscope.pipeline.runner import Pipeline
 
 
 class TestPipeline:
@@ -28,7 +28,7 @@ class TestPipeline:
         mock_source = MagicMock()
         mock_source.fetch.return_value = result
 
-        with patch("urban_research.pipeline.runner.SourceRegistry") as mock_registry:
+        with patch("cityscope.pipeline.runner.SourceRegistry") as mock_registry:
             mock_registry.get.return_value = mock_source
 
             pipeline = Pipeline(config)
@@ -45,7 +45,7 @@ class TestPipeline:
         assert len(data) > 0
 
     def test_run_all_sources(self, config):
-        with patch("urban_research.pipeline.runner.SourceRegistry") as mock_registry:
+        with patch("cityscope.pipeline.runner.SourceRegistry") as mock_registry:
             mock_registry.list_ids.return_value = ["source_a", "source_b"]
 
             mock_source = MagicMock()

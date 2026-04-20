@@ -2,9 +2,9 @@
 
 import pytest
 
-from urban_research import api
-from urban_research.core.config import Config
-from urban_research.core.storage import Storage
+from cityscope import api
+from cityscope.core.config import Config
+from cityscope.core.storage import Storage
 
 
 @pytest.fixture(autouse=True)

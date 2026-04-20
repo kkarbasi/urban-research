@@ -2,8 +2,8 @@
 
 import pytest
 
-from urban_research.core.config import Config
-from urban_research.sources.bls_employment import (
+from cityscope.core.config import Config
+from cityscope.sources.bls_employment import (
     BLSEmploymentSource,
     _cbsa_to_qcew_fips,
     _parse_principal_state_fips,

@@ -1,9 +1,9 @@
 """Tests for source registry."""
 
-from urban_research.core.config import Config
-from urban_research.core.registry import SourceRegistry
+from cityscope.core.config import Config
+from cityscope.core.registry import SourceRegistry
 
-import urban_research.sources  # noqa: F401
+import cityscope.sources  # noqa: F401
 
 
 class TestSourceRegistry:

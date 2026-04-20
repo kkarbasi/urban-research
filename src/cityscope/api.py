@@ -5,7 +5,7 @@ Users who `pip install urban-research` interact through this API or the CLI.
 
 Example usage:
 
-    from urban_research import api
+    from cityscope import api
 
     # Fetch population data
     result = api.fetch("census_population")
@@ -36,7 +36,7 @@ from .core.registry import SourceRegistry
 from .core.storage import Storage
 from .pipeline.runner import Pipeline
 
-import urban_research.sources  # noqa: F401 — triggers registration
+import cityscope.sources  # noqa: F401 — triggers registration
 
 
 _config: Config | None = None

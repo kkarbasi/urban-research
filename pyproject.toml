@@ -1,5 +1,5 @@
 [project]
-name = "urban-research"
+name = "cityscope"
 version = "0.1.0"
 description = "Real estate investment research data pipeline for US metros and cities"
 readme = "README.md"
@@ -26,26 +26,21 @@ dependencies = [
     "rich>=15.0.0",
 ]
 
-[project.optional-dependencies]
-dashboard = [
-    "plotly>=6.7.0",
-    "streamlit>=1.56.0",
-]
 
 [project.urls]
-Homepage = "https://github.com/kkarbasi/urban-research"
-Repository = "https://github.com/kkarbasi/urban-research"
-Issues = "https://github.com/kkarbasi/urban-research/issues"
+Homepage = "https://github.com/kkarbasi/cityscope"
+Repository = "https://github.com/kkarbasi/cityscope"
+Issues = "https://github.com/kkarbasi/cityscope/issues"
 
 [project.scripts]
-urban-research = "urban_research.cli:cli"
+cityscope = "cityscope.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/urban_research"]
+packages = ["src/cityscope"]
 
 [dependency-groups]
 dev = [

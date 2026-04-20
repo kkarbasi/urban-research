@@ -5,9 +5,9 @@ import json
 import httpx
 import pytest
 
-from urban_research.core.config import Config
-from urban_research.core.models import GeoType
-from urban_research.sources.census_population import (
+from cityscope.core.config import Config
+from cityscope.core.models import GeoType
+from cityscope.sources.census_population import (
     CensusPopulationSource,
     _build_models,
 )
@@ -19,20 +19,20 @@ class TestParseStateFips:
     # This is used by the BLS source too — tested here at the origin.
 
     def test_single_state(self):
-        from urban_research.sources.bls_employment import _parse_principal_state_fips as parse
+        from cityscope.sources.bls_employment import _parse_principal_state_fips as parse
         assert parse("Dallas-Fort Worth-Arlington, TX Metro Area") == "48"
 
     def test_multi_state_returns_first(self):
-        from urban_research.sources.bls_employment import _parse_principal_state_fips as parse
+        from cityscope.sources.bls_employment import _parse_principal_state_fips as parse
         assert parse("New York-Newark-Jersey City, NY-NJ-PA Metro Area") == "36"
         assert parse("Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area") == "11"
 
     def test_dc(self):
-        from urban_research.sources.bls_employment import _parse_principal_state_fips as parse
+        from cityscope.sources.bls_employment import _parse_principal_state_fips as parse
         assert parse("Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area") == "11"
 
     def test_no_match_returns_none(self):
-        from urban_research.sources.bls_employment import _parse_principal_state_fips as parse
+        from cityscope.sources.bls_employment import _parse_principal_state_fips as parse
         assert parse("Some random string") is None
 
 

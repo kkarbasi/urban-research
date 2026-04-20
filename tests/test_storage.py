@@ -2,8 +2,8 @@
 
 import sqlite3
 
-from urban_research.core.models import DataPoint, Geography, GeoType
-from urban_research.core.storage import Storage
+from cityscope.core.models import DataPoint, Geography, GeoType
+from cityscope.core.storage import Storage
 
 
 class TestStorageInit:

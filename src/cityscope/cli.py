@@ -12,7 +12,7 @@ from .core.registry import SourceRegistry
 from .core.storage import Storage
 from .pipeline.runner import Pipeline
 
-import urban_research.sources  # noqa: F401 — triggers source registration
+import cityscope.sources  # noqa: F401 — triggers source registration
 
 console = Console()
 
@@ -31,7 +31,7 @@ def _load_config(config_path: str | None) -> Config:
 @click.option("--verbose", "-v", is_flag=True, help="Verbose logging")
 @click.pass_context
 def cli(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
-    """Urban Research — real estate investment data pipeline."""
+    """Cityscope — real estate investment research data pipeline."""
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -200,20 +200,6 @@ def status(ctx: click.Context) -> None:
 
     console.print(table)
 
-
-@cli.command()
-@click.option("--port", "-p", type=int, default=8501, help="Port number")
-def dashboard(port: int) -> None:
-    """Launch the Streamlit dashboard."""
-    import subprocess
-    import sys
-
-    app_path = Path(__file__).parent / "dashboard" / "app.py"
-    console.print(f"[green]Starting dashboard on http://localhost:{port}[/green]")
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", str(app_path),
-         "--server.port", str(port), "--server.headless", "true"],
-    )
 
 
 @cli.command("init-config")

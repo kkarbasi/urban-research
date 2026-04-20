@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from urban_research.core.models import (
+from cityscope.core.models import (
     DataPoint,
     DatasetMetadata,
     FetchResult,

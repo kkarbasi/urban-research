@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from urban_research.core.config import Config
+from cityscope.core.config import Config
 
 
 class TestConfigDefaults:
@@ -10,7 +10,7 @@ class TestConfigDefaults:
         config = Config()
         assert config.census.api_key is None
         assert config.bls.api_key is None
-        assert config.storage.db_path == "data/urban_research.db"
+        assert config.storage.db_path == "data/cityscope.db"
         assert config.pipeline.min_population == 200_000
         assert config.pipeline.default_vintage is None
 

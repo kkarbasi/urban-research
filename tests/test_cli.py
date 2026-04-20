@@ -2,7 +2,7 @@
 
 from click.testing import CliRunner
 
-from urban_research.cli import cli
+from cityscope.cli import cli
 
 
 class TestCLI:
@@ -10,7 +10,7 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
-        assert "Urban Research" in result.output
+        assert "Cityscope" in result.output
 
     def test_sources_command(self):
         runner = CliRunner()

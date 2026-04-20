@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from urban_research.core.config import Config
-from urban_research.core.models import DataPoint, Geography, GeoType
-from urban_research.core.storage import Storage
+from cityscope.core.config import Config
+from cityscope.core.models import DataPoint, Geography, GeoType
+from cityscope.core.storage import Storage
 
 
 @pytest.fixture

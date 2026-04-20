@@ -15,7 +15,7 @@ class BLSConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    db_path: str = "data/urban_research.db"
+    db_path: str = "data/cityscope.db"
 
 
 class PipelineConfig(BaseModel):
