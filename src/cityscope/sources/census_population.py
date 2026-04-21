@@ -236,6 +236,113 @@ def _build_models(
 
 
 # ---------------------------------------------------------------------------
+# Single-geo lookups (fallback for address lookup)
+# ---------------------------------------------------------------------------
+
+def _fetch_single_county(
+    state_fips: str, county_fips: str, vintage: int, api_key: str | None,
+) -> tuple[list[Geography], list[DataPoint]]:
+    """Fetch population for a specific county via PEP charv."""
+    url = f"{CENSUS_BASE}/{vintage}/pep/charv"
+    params: dict[str, str] = {
+        "get": "POP,NAME,YEAR",
+        "for": f"county:{county_fips}",
+        "in": f"state:{state_fips}",
+        "MONTH": "7",
+    }
+    if api_key:
+        params["key"] = api_key
+
+    logger.info("Fetching county %s%s from PEP charv vintage %d", state_fips, county_fips, vintage)
+    data = _get(url, params).json()
+    headers = data[0]
+    rows = data[1:]
+
+    geo_id = f"{state_fips}{county_fips}"
+    pop_by_year: dict[int, int] = {}
+    name = ""
+    for row in rows:
+        rec = dict(zip(headers, row))
+        try:
+            year = int(rec.get("YEAR", 0))
+            pop = int(rec["POP"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        pop_by_year[year] = pop
+        name = rec.get("NAME", name)
+
+    if not pop_by_year:
+        return [], []
+
+    pop_by_geo = {geo_id: pop_by_year}
+    name_by_geo = {geo_id: name}
+    geos, points = _build_models(pop_by_geo, name_by_geo, GeoType.COUNTY, f"pep_{vintage}")
+    for g in geos:
+        g.state_fips = state_fips
+    return geos, points
+
+
+def _fetch_single_metro(cbsa: str, vintage: int, api_key: str | None) -> tuple[list[Geography], list[DataPoint]]:
+    """Fetch population for one CBSA by reusing the all-metros fetch and filtering.
+
+    PEP charv doesn't support `for=metropolitan...:{CBSA}` with wildcards, but the
+    full-metros fetch is cheap (~3,700 rows) and already tested, so we reuse it.
+    """
+    all_geos, all_points = _fetch_metros(vintage, api_key)
+    geos = [g for g in all_geos if g.geo_id == cbsa]
+    points = [p for p in all_points if p.geo_id == cbsa]
+    return geos, points
+
+
+def _fetch_single_city(
+    place_geo_id: str, vintages: list[int], api_key: str | None,
+) -> tuple[list[Geography], list[DataPoint]]:
+    """Fetch population for one place via ACS 1-year across multiple vintages."""
+    if len(place_geo_id) != 7:
+        return [], []
+    state_fips = place_geo_id[:2]
+    place_fips = place_geo_id[2:]
+
+    pop_by_year: dict[int, int] = {}
+    name = ""
+
+    for vintage in vintages:
+        url = f"{CENSUS_BASE}/{vintage}/acs/acs1"
+        params: dict[str, str] = {
+            "get": "B01003_001E,NAME",
+            "for": f"place:{place_fips}",
+            "in": f"state:{state_fips}",
+        }
+        if api_key:
+            params["key"] = api_key
+        try:
+            data = _get(url, params).json()
+        except Exception as e:
+            logger.warning("ACS %d place fetch failed: %s", vintage, e)
+            continue
+        if len(data) < 2:
+            continue
+        rec = dict(zip(data[0], data[1]))
+        try:
+            pop = int(rec["B01003_001E"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        pop_by_year[vintage] = pop
+        name = rec.get("NAME", name)
+
+    if not pop_by_year:
+        return [], []
+
+    pop_by_geo = {place_geo_id: pop_by_year}
+    name_by_geo = {place_geo_id: name}
+    label = f"acs_{min(pop_by_year)}-{max(pop_by_year)}"
+    geos, points = _build_models(pop_by_geo, name_by_geo, GeoType.CITY, label)
+    for g in geos:
+        g.state_fips = state_fips
+    return geos, points
+
+
+# ---------------------------------------------------------------------------
 # Registered source
 # ---------------------------------------------------------------------------
 
@@ -244,6 +351,7 @@ class CensusPopulationSource(DataSource):
     source_id = "census_population"
     name = "Census Bureau Population Estimates"
     description = "Annual population estimates and growth rates for metros and cities"
+    supported_geo_types_for_lookup = [GeoType.METRO, GeoType.CITY, GeoType.COUNTY]
 
     def __init__(self, config: Config):
         super().__init__(config)
@@ -290,5 +398,39 @@ class CensusPopulationSource(DataSource):
                 max_year=max(years) if years else 0,
                 last_fetched=datetime.now(timezone.utc),
                 record_count=len(all_points),
+            ),
+        )
+
+    def fetch_for_geo(self, geo_id: str, geo_type: GeoType) -> FetchResult:
+        """Fetch population data for a single geography (lookup fallback)."""
+        if geo_type == GeoType.COUNTY:
+            if len(geo_id) != 5:
+                raise ValueError(f"County geo_id must be 5 digits, got {geo_id!r}")
+            state_fips, county_fips = geo_id[:2], geo_id[2:]
+            vintage = self.config.pipeline.default_vintage or _detect_pep_vintage(self._api_key)
+            geos, points = _fetch_single_county(state_fips, county_fips, vintage, self._api_key)
+        elif geo_type == GeoType.METRO:
+            vintage = self.config.pipeline.default_vintage or _detect_pep_vintage(self._api_key)
+            geos, points = _fetch_single_metro(geo_id, vintage, self._api_key)
+        elif geo_type == GeoType.CITY:
+            vintages = _detect_acs_vintages(self._api_key, base_year=2021)
+            geos, points = _fetch_single_city(geo_id, vintages, self._api_key)
+        else:
+            raise NotImplementedError(f"Census source does not support {geo_type}")
+
+        years = {p.year for p in points}
+        return FetchResult(
+            geographies=geos,
+            data_points=points,
+            metadata=DatasetMetadata(
+                source_id=self.source_id,
+                name=self.name,
+                description=self.description,
+                metrics=["population", "population_change", "population_change_pct"],
+                geo_types=[geo_type],
+                min_year=min(years) if years else 0,
+                max_year=max(years) if years else 0,
+                last_fetched=datetime.now(timezone.utc),
+                record_count=len(points),
             ),
         )

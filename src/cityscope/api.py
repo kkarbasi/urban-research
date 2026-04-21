@@ -31,9 +31,15 @@ from typing import Any
 import pandas as pd
 
 from .core.config import Config
-from .core.models import FetchResult
+from .core.models import (
+    FetchResult,
+    GeoLevelSnapshot,
+    GeoType,
+    LocationReport,
+)
 from .core.registry import SourceRegistry
 from .core.storage import Storage
+from .geocoding import GeocodingError, GeocodingResult, geocode_address
 from .pipeline.runner import Pipeline
 
 import cityscope.sources  # noqa: F401 — triggers registration
@@ -244,3 +250,151 @@ def to_dataframe(
         limit=limit,
     )
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Address lookup
+# ---------------------------------------------------------------------------
+
+
+def _build_snapshot(
+    storage: Storage,
+    geo_id: str,
+    geo_type: GeoType,
+    year: int | None,
+) -> GeoLevelSnapshot | None:
+    """Build a GeoLevelSnapshot from stored data for a single geography."""
+    rows = storage.query_data(
+        geo_type=geo_type.value,
+        year=year,
+        limit=10_000,
+    )
+    rows = [r for r in rows if r["geo_id"] == geo_id]
+
+    if not rows:
+        return None
+
+    # Use the latest year if none specified, and bundle all metrics for that year
+    target_year = year if year is not None else max(r["year"] for r in rows)
+    year_rows = [r for r in rows if r["year"] == target_year]
+    if not year_rows:
+        year_rows = rows
+
+    metrics = {r["metric"]: r["value"] for r in year_rows}
+    first = year_rows[0]
+
+    return GeoLevelSnapshot(
+        geo_id=geo_id,
+        name=first["name"],
+        geo_type=geo_type,
+        population=first.get("population"),
+        year=first["year"],
+        metrics=metrics,
+    )
+
+
+def _try_fetch_for_geo(
+    config: Config,
+    geo_id: str,
+    geo_type: GeoType,
+) -> bool:
+    """Try each registered source that supports this geo_type. Returns True if any succeeded."""
+    any_success = False
+    storage = _get_storage()
+
+    for source_id in SourceRegistry.list_ids():
+        source = SourceRegistry.get(source_id, config)
+        if geo_type not in source.supported_geo_types_for_lookup:
+            continue
+        try:
+            result = source.fetch_for_geo(geo_id, geo_type)
+        except NotImplementedError:
+            continue
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Fallback fetch failed for %s/%s via %s: %s",
+                geo_type, geo_id, source_id, e,
+            )
+            continue
+
+        if result.geographies:
+            storage.upsert_geographies(result.geographies)
+        if result.data_points:
+            storage.upsert_data_points(result.data_points)
+            any_success = True
+
+    return any_success
+
+
+def lookup(
+    address: str,
+    *,
+    auto_fetch: bool = False,
+    year: int | None = None,
+) -> LocationReport:
+    """Look up stats for a US address.
+
+    Geocodes the address via the Census Geocoder, then assembles a report
+    with metro-, city-, and county-level stats from local storage. If a
+    given level has no local data and `auto_fetch=True`, any registered
+    source that supports that geography type will be called as a fallback.
+
+    Args:
+        address: Free-form US address, e.g. "1600 Amphitheatre Pkwy, Mountain View, CA".
+        auto_fetch: If True, fetch missing data from source APIs on-the-fly
+                    and store it for future lookups. Default False.
+        year: Year to report. If None, uses the latest available per level.
+
+    Returns:
+        LocationReport with metro/city/county snapshots (None if no data).
+
+    Raises:
+        GeocodingError: If the address cannot be matched.
+    """
+    config = _get_config()
+    storage = _get_storage()
+
+    geo_result: GeocodingResult = geocode_address(address)
+
+    report = LocationReport(
+        address=address,
+        matched_address=geo_result.matched_address,
+        latitude=geo_result.latitude,
+        longitude=geo_result.longitude,
+        state_fips=geo_result.state_fips,
+        tract_geoid=geo_result.tract_geoid,
+    )
+
+    levels: list[tuple[str, GeoType, str | None]] = [
+        ("metro", GeoType.METRO, geo_result.cbsa_code),
+        ("city", GeoType.CITY, geo_result.place_geo_id),
+        ("county", GeoType.COUNTY, geo_result.county_geo_id),
+    ]
+
+    for field_name, geo_type, geo_id in levels:
+        if not geo_id:
+            report.warnings.append(
+                f"No {geo_type.value} identifier for this address"
+            )
+            continue
+
+        snapshot = _build_snapshot(storage, geo_id, geo_type, year)
+
+        if snapshot is None and auto_fetch:
+            fetched = _try_fetch_for_geo(config, geo_id, geo_type)
+            if fetched:
+                snapshot = _build_snapshot(storage, geo_id, geo_type, year)
+            else:
+                report.warnings.append(
+                    f"No data available for {geo_type.value} {geo_id}"
+                )
+        elif snapshot is None:
+            report.warnings.append(
+                f"No local data for {geo_type.value} {geo_id} "
+                f"(re-run with auto_fetch=True to fetch from source)"
+            )
+
+        setattr(report, field_name, snapshot)
+
+    return report

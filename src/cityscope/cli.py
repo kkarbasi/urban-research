@@ -8,8 +8,10 @@ from rich.console import Console
 from rich.table import Table
 
 from .core.config import Config
+from .core.models import LocationReport
 from .core.registry import SourceRegistry
 from .core.storage import Storage
+from .geocoding import GeocodingError
 from .pipeline.runner import Pipeline
 
 import cityscope.sources  # noqa: F401 — triggers source registration
@@ -200,6 +202,92 @@ def status(ctx: click.Context) -> None:
 
     console.print(table)
 
+
+
+METRIC_LABELS = {
+    "population": "Population",
+    "population_change": "Pop. Change",
+    "population_change_pct": "Pop. Growth %",
+    "employment": "Employment",
+    "employment_change": "Job Change",
+    "employment_change_pct": "Job Growth %",
+    "unemployment_rate": "Unemployment Rate %",
+    "avg_annual_pay": "Avg. Annual Pay",
+    "avg_weekly_wage": "Avg. Weekly Wage",
+}
+
+
+def _fmt_metric_value(metric: str, value: float) -> str:
+    if "pct" in metric or "rate" in metric:
+        sign = "+" if "change" in metric else ""
+        return f"{value:{sign}.2f}%"
+    if metric in ("avg_annual_pay", "avg_weekly_wage"):
+        return f"${value:,.0f}"
+    return f"{value:,.0f}"
+
+
+def _print_snapshot_panel(title: str, snapshot) -> None:
+    if snapshot is None:
+        console.print(f"[dim]{title}: no data[/dim]")
+        return
+
+    table = Table(title=title, show_header=True, header_style="bold cyan")
+    table.add_column("Metric", style="dim")
+    table.add_column(f"{snapshot.year}", justify="right", style="bold")
+
+    if snapshot.population is not None:
+        table.add_row("Population", f"{snapshot.population:,}")
+
+    for metric in sorted(snapshot.metrics):
+        if metric == "population":  # already shown as geography field
+            continue
+        label = METRIC_LABELS.get(metric, metric)
+        table.add_row(label, _fmt_metric_value(metric, snapshot.metrics[metric]))
+
+    console.print(table)
+
+
+@cli.command()
+@click.argument("address")
+@click.option(
+    "--auto-fetch", is_flag=True,
+    help="Fetch missing data from source APIs on-the-fly (slower first time).",
+)
+@click.option("--year", type=int, default=None, help="Target year (default: latest available)")
+@click.pass_context
+def lookup(ctx: click.Context, address: str, auto_fetch: bool, year: int | None) -> None:
+    """Look up stats for a US address — metro, city, and county data."""
+    from . import api as api_mod
+
+    config: Config = ctx.obj["config"]
+    api_mod.configure(db_path=config.storage.db_path)
+
+    try:
+        report: LocationReport = api_mod.lookup(
+            address, auto_fetch=auto_fetch, year=year,
+        )
+    except GeocodingError as e:
+        console.print(f"[red]Geocoding failed: {e}[/red]")
+        return
+
+    console.print()
+    console.print(f"[bold]Address:[/bold] {report.matched_address}")
+    if report.latitude and report.longitude:
+        console.print(
+            f"[dim]Coordinates: {report.latitude:.4f}, {report.longitude:.4f}[/dim]"
+        )
+    if report.tract_geoid:
+        console.print(f"[dim]Census tract: {report.tract_geoid}[/dim]")
+    console.print()
+
+    _print_snapshot_panel("Metro Area", report.metro)
+    _print_snapshot_panel("City", report.city)
+    _print_snapshot_panel("County", report.county)
+
+    if report.warnings:
+        console.print()
+        for w in report.warnings:
+            console.print(f"[yellow]⚠ {w}[/yellow]")
 
 
 @cli.command("init-config")

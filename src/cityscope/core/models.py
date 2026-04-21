@@ -54,3 +54,31 @@ class FetchResult(BaseModel):
     geographies: list[Geography]
     data_points: list[DataPoint]
     metadata: DatasetMetadata
+
+
+class GeoLevelSnapshot(BaseModel):
+    """Latest-year stats for a single geography within a LocationReport."""
+
+    geo_id: str
+    name: str
+    geo_type: GeoType
+    population: int | None = None
+    year: int
+    metrics: dict[str, float] = Field(default_factory=dict)
+
+
+class LocationReport(BaseModel):
+    """Result of looking up stats for a specific address."""
+
+    address: str
+    matched_address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    state_fips: str | None = None
+    tract_geoid: str | None = None
+
+    metro: GeoLevelSnapshot | None = None
+    city: GeoLevelSnapshot | None = None
+    county: GeoLevelSnapshot | None = None
+
+    warnings: list[str] = Field(default_factory=list)

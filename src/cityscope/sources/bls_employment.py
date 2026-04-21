@@ -206,11 +206,64 @@ def _fetch_laus_unemployment(
 # Registered source
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Single-geo QCEW fetch (for address lookup fallback)
+# ---------------------------------------------------------------------------
+
+def _fetch_qcew_single_area(area_fips: str) -> dict[int, dict]:
+    """Download QCEW data for a single area (metro or county) across available years.
+
+    area_fips: 5-digit state+county FIPS for counties, or 5-digit CBSA code for metros
+               (QCEW uses the 5-digit CBSA directly as area_fips for metros in the
+               single-area endpoint — different from the industry-level file which
+               uses C{4-digit} prefix).
+    Returns dict of year -> data fields.
+    """
+    results: dict[int, dict] = {}
+    current_year = datetime.now().year
+    for year in range(current_year - 5, current_year):
+        url = f"https://data.bls.gov/cew/data/api/{year}/a/area/{area_fips}.csv"
+        try:
+            with httpx.Client(timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}) as client:
+                resp = client.get(url)
+                if resp.status_code != 200:
+                    continue
+        except httpx.HTTPError as e:
+            logger.warning("QCEW area %s %d failed: %s", area_fips, year, e)
+            continue
+
+        reader = csv.DictReader(io.StringIO(resp.text))
+        for row in reader:
+            own_code = row.get("own_code", "").strip('"')
+            industry_code = row.get("industry_code", "").strip('"')
+            # Total across all ownerships + all industries
+            if own_code != "0" or industry_code != "10":
+                continue
+            try:
+                results[year] = {
+                    "employment": int(row.get("annual_avg_emplvl", 0) or 0),
+                    "avg_annual_pay": int(row.get("avg_annual_pay", 0) or 0),
+                    "avg_weekly_wage": int(row.get("annual_avg_wkly_wage", 0) or 0),
+                    "emp_change": int(row.get("oty_annual_avg_emplvl_chg", 0) or 0),
+                    "emp_change_pct": float(row.get("oty_annual_avg_emplvl_pct_chg", 0) or 0),
+                }
+            except (ValueError, TypeError):
+                continue
+            break
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Registered source
+# ---------------------------------------------------------------------------
+
 @SourceRegistry.register
 class BLSEmploymentSource(DataSource):
     source_id = "bls_employment"
     name = "BLS Employment & Unemployment (QCEW + LAUS)"
     description = "Employment, wages, and unemployment rate for metro areas"
+    supported_geo_types_for_lookup = [GeoType.METRO, GeoType.COUNTY]
 
     def __init__(self, config: Config):
         super().__init__(config)
@@ -303,5 +356,68 @@ class BLSEmploymentSource(DataSource):
                 max_year=max(years) if years else 0,
                 last_fetched=now,
                 record_count=len(all_points),
+            ),
+        )
+
+    def fetch_for_geo(self, geo_id: str, geo_type: GeoType) -> FetchResult:
+        """Fetch QCEW employment/wage data for a single geography (lookup fallback).
+
+        Note: does NOT fetch LAUS unemployment rate (requires BLS API key and is
+        rate-limited). Use the main fetch() method for that.
+        """
+        if geo_type not in (GeoType.METRO, GeoType.COUNTY):
+            raise NotImplementedError(f"BLS source does not support {geo_type}")
+
+        if len(geo_id) != 5:
+            raise ValueError(f"geo_id must be 5 digits, got {geo_id!r}")
+
+        now = datetime.now(timezone.utc)
+        points: list[DataPoint] = []
+
+        year_data = _fetch_qcew_single_area(geo_id)
+
+        for year, d in sorted(year_data.items()):
+            vintage = f"qcew_{year}"
+            points.append(DataPoint(
+                geo_id=geo_id, metric="employment", year=year,
+                value=float(d["employment"]), source=self.source_id,
+                vintage=vintage, fetched_at=now,
+            ))
+            points.append(DataPoint(
+                geo_id=geo_id, metric="avg_annual_pay", year=year,
+                value=float(d["avg_annual_pay"]), source=self.source_id,
+                vintage=vintage, fetched_at=now,
+            ))
+            points.append(DataPoint(
+                geo_id=geo_id, metric="avg_weekly_wage", year=year,
+                value=float(d["avg_weekly_wage"]), source=self.source_id,
+                vintage=vintage, fetched_at=now,
+            ))
+            if d["emp_change_pct"] != 0 or d["emp_change"] != 0:
+                points.append(DataPoint(
+                    geo_id=geo_id, metric="employment_change", year=year,
+                    value=float(d["emp_change"]), source=self.source_id,
+                    vintage=vintage, fetched_at=now,
+                ))
+                points.append(DataPoint(
+                    geo_id=geo_id, metric="employment_change_pct", year=year,
+                    value=d["emp_change_pct"], source=self.source_id,
+                    vintage=vintage, fetched_at=now,
+                ))
+
+        years = {p.year for p in points}
+        return FetchResult(
+            geographies=[],
+            data_points=points,
+            metadata=DatasetMetadata(
+                source_id=self.source_id,
+                name=self.name,
+                description=self.description,
+                metrics=sorted({p.metric for p in points}),
+                geo_types=[geo_type],
+                min_year=min(years) if years else 0,
+                max_year=max(years) if years else 0,
+                last_fetched=now,
+                record_count=len(points),
             ),
         )

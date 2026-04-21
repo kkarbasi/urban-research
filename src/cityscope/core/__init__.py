@@ -1,4 +1,12 @@
-from .models import Geography, GeoType, DataPoint, FetchResult, DatasetMetadata
+from .models import (
+    DataPoint,
+    DatasetMetadata,
+    FetchResult,
+    GeoLevelSnapshot,
+    Geography,
+    GeoType,
+    LocationReport,
+)
 from .source import DataSource
 from .registry import SourceRegistry
 from .storage import Storage
@@ -10,6 +18,8 @@ __all__ = [
     "DataPoint",
     "FetchResult",
     "DatasetMetadata",
+    "GeoLevelSnapshot",
+    "LocationReport",
     "DataSource",
     "SourceRegistry",
     "Storage",

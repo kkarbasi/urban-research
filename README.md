@@ -48,6 +48,12 @@ rows = api.query(metric="employment_change_pct", geo_type="metro", year=2024, li
 for row in rows:
     print(f"{row['name']}: {row['value']:+.1f}% job growth")
 
+# Look up stats for a specific address
+report = api.lookup("1600 Amphitheatre Pkwy, Mountain View, CA", auto_fetch=True)
+print(f"Metro: {report.metro.name} — {report.metro.metrics}")
+print(f"City:  {report.city.name} — population {report.city.population:,}")
+print(f"County: {report.county.name}")
+
 # Configure (optional — works with defaults)
 api.configure(db_path="my_data.db", min_population=100_000)
 
@@ -70,6 +76,10 @@ cityscope query -m population_change_pct -g metro -y 2024
 cityscope query -m employment_change_pct -g metro -y 2024 -n 10
 cityscope query -m avg_annual_pay -y 2024 -n 15
 
+# Look up stats for an address
+cityscope lookup "1600 Amphitheatre Pkwy, Mountain View, CA"
+cityscope lookup "123 Main St, Austin, TX" --auto-fetch
+
 # Info
 cityscope sources
 cityscope status
@@ -82,9 +92,20 @@ cityscope status
 | `fetch <source>` | Pull data from a source (`census_population`, `bls_employment`) |
 | `fetch --all` | Pull from all sources |
 | `query` | Query stored data (`-m`, `-g`, `-y`, `--min-pop`, `-n`) |
+| `lookup <address>` | Look up stats for a US address (metro + city + county) |
 | `sources` | List available data sources |
 | `status` | Show fetched data summary |
 | `init-config` | Generate default `config/settings.yaml` |
+
+### Address Lookup
+
+The `lookup` command geocodes a US address (via the free Census Geocoder) and returns stats for the enclosing metro, city, and county:
+
+```bash
+cityscope lookup "1600 Amphitheatre Pkwy, Mountain View, CA" --auto-fetch
+```
+
+With `--auto-fetch`, cityscope will fall back to fetching missing data from source APIs on-the-fly (useful for addresses in counties or smaller cities not covered by the default 200k+ metro/city fetch). Results are cached in the local DB.
 
 Global flags: `-v` (verbose logging), `-c PATH` (custom config file).
 
