@@ -371,10 +371,18 @@ class BLSEmploymentSource(DataSource):
         if len(geo_id) != 5:
             raise ValueError(f"geo_id must be 5 digits, got {geo_id!r}")
 
+        # QCEW area_fips format differs by geo type:
+        #   - Metros: C{first 4 digits of CBSA} (e.g., CBSA 41940 → C4194)
+        #   - Counties: 5-digit state+county FIPS used directly
+        if geo_type == GeoType.METRO:
+            area_fips = _cbsa_to_qcew_fips(geo_id)
+        else:
+            area_fips = geo_id
+
         now = datetime.now(timezone.utc)
         points: list[DataPoint] = []
 
-        year_data = _fetch_qcew_single_area(geo_id)
+        year_data = _fetch_qcew_single_area(area_fips)
 
         for year, d in sorted(year_data.items()):
             vintage = f"qcew_{year}"
