@@ -133,7 +133,9 @@ def _fetch_laus_unemployment(
         if not state_fips:
             continue
         cbsa = metro["geo_id"]
-        sid = f"LAUMT{state_fips}{cbsa}000000003"
+        # LAUS series ID: LA + U + MT + state(2) + CBSA(5) + measure(8, zero-padded)
+        # Measure 3 = unemployment rate → "00000003" (8 digits)
+        sid = f"LAUMT{state_fips}{cbsa}00000003"
         series_map[sid] = cbsa
 
     series_ids = list(series_map.keys())
