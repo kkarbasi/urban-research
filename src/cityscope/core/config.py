@@ -14,6 +14,10 @@ class BLSConfig(BaseModel):
     api_key: str | None = None
 
 
+class BEAConfig(BaseModel):
+    api_key: str | None = None
+
+
 class StorageConfig(BaseModel):
     db_path: str = "data/cityscope.db"
 
@@ -26,6 +30,7 @@ class PipelineConfig(BaseModel):
 class Config(BaseModel):
     census: CensusConfig = CensusConfig()
     bls: BLSConfig = BLSConfig()
+    bea: BEAConfig = BEAConfig()
     storage: StorageConfig = StorageConfig()
     pipeline: PipelineConfig = PipelineConfig()
 
